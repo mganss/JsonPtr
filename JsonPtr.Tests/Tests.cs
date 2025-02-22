@@ -44,6 +44,7 @@ public class JsonElementExtensionsTests
 
         // Out-of-range array indices
         yield return new object?[] { @"[1,2,3]", "/3", "Array index 3 is out of range." };
+        yield return new object?[] { @"[1,2,3]", "/-1", "Array index -1 is out of range." };
         yield return new object?[] { @"[]", "/0", "Array index 0 is out of range." };
 
         // Invalid navigation
@@ -57,6 +58,9 @@ public class JsonElementExtensionsTests
 
         // Unescaped pointer does not match
         yield return new object?[] { @"{""foo/bar"":""baz""}", "/foo/bar", "Property 'foo' not found" };
+
+        // Pointer does not start with "/"
+        yield return new object?[] { @"{""name"":""John""}", "name", "A JSON pointer must start with a '/'" };
     }
 
     [Test]
