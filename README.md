@@ -6,7 +6,7 @@
 [![netstandard2.0](https://img.shields.io/badge/netstandard-2.0-brightgreen.svg)](https://img.shields.io/badge/netstandard-2.0-brightgreen.svg)
 [![net462](https://img.shields.io/badge/net-462-brightgreen.svg)](https://img.shields.io/badge/net-462-brightgreen.svg)
 
-This project provides extension methods for the `System.Text.Json.JsonElement` type to support JSON Pointer (RFC 6901) resolution.
+Extension methods for [`System.Text.Json.JsonElement`](https://learn.microsoft.com/en-us/dotnet/api/system.text.json.jsonelement) to support JSON Pointer ([RFC 6901](https://datatracker.ietf.org/doc/html/rfc6901)) resolution.
 
 ## Features
 
@@ -15,6 +15,7 @@ This project provides extension methods for the `System.Text.Json.JsonElement` t
   - `GetElement`: Retrieves a JSON element or throws a `JsonPointerException` on failure.
   - `GetElementOrNull`: Retrieves a JSON element or returns null on failure.
   - `TryGetElement`: Attempts to retrieve a JSON element, returning a success flag and error details if applicable.
+- Resolution is relative to given `JsonElement`
 
 ## Usage
 
@@ -43,8 +44,6 @@ catch (JsonPointerException ex)
 Retrieves a JSON element or returns null if the pointer cannot be resolved.
 
 ```csharp
-using System.Text.Json;
-
 var json = @"{""person"":{""name"":""John""}}";
 var element = JsonDocument.Parse(json).RootElement;
 
@@ -59,8 +58,6 @@ Console.WriteLine(age.HasValue ? age.Value.GetString() : "Not found"); // Output
 Attempts to retrieve a JSON element, returning success status and error details.
 
 ```csharp
-using System.Text.Json;
-
 var json = @"{""person"":{""name"":""John""}}";
 var element = JsonDocument.Parse(json).RootElement;
 
@@ -80,3 +77,4 @@ else
 - `/0` accesses an array element by index.
 - Use `~0` for `~` and `~1` for `/` in escaped keys (e.g., `/foo~1bar` for key `foo/bar`).
 - Empty pointer (`""`) refers to the root element.
+- Must start with `/`
