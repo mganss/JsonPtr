@@ -8,11 +8,16 @@ namespace Ganss.Text.Json;
 /// <summary>
 /// Provides extension methods for working with <see cref="JsonElement"/> using JSON Pointers (RFC 6901).
 /// </summary>
+/// <remarks>
+/// Pointers are always resolved relative to the given element, because a <see cref="JsonElement"/> has no reference
+/// to its document root. A leading '/' is optional: "/a/b" and "a/b" refer to the same element.
+/// This differs from <see cref="JsonNodeExtensions"/>, where a leading '/' resolves from the document root.
+/// </remarks>
 public static class JsonElementExtensions
 {
     /// <summary>
     /// Attempts to retrieve the JSON element at the specified JSON Pointer.
-    /// Returns null if the pointer is valid; otherwise, returns an instance of <see cref="JsonPointerError"/> describing the error.
+    /// Returns null if the pointer is valid; otherwise, returns an instance of <see cref="JsonPointerElementError"/> describing the error.
     /// </summary>
     /// <param name="element">The root JSON element.</param>
     /// <param name="pointer">The JSON Pointer string (RFC 6901).</param>
@@ -20,9 +25,9 @@ public static class JsonElementExtensions
     /// When the method returns, contains the JSON element referenced by the pointer if successful.
     /// </param>
     /// <returns>
-    /// Null if the pointer was successfully resolved; otherwise, a <see cref="JsonPointerError"/> instance describing the error.
+    /// Null if the pointer was successfully resolved; otherwise, a <see cref="JsonPointerElementError"/> instance describing the error.
     /// </returns>
-    private static JsonPointerError Resolve(JsonElement element, string pointer, out JsonElement result)
+    private static JsonPointerElementError? Resolve(JsonElement element, string pointer, out JsonElement result)
     {
         result = element;
 
@@ -30,27 +35,19 @@ public static class JsonElementExtensions
         if (string.IsNullOrEmpty(pointer))
             return null;
 
-        // A valid JSON pointer must start with '/'.
-        if (pointer[0] != '/')
-            return new JsonPointerError(
-                JsonPointerErrorKind.PointerMustStartWithSlash,
-                "A JSON pointer must start with a '/'",
-                pointer,
-                element);
-
+        // Empty tokens are significant (RFC 6901: "/" refers to the key ""), so they must not be removed.
         var tokens = pointer.Split('/');
         var current = element;
 
-        // Process each token (the first token is empty because the pointer starts with '/').
-        for (var i = 1; i < tokens.Length; i++)
+        // Skip the first token if it is empty because the pointer starts with '/'.
+        for (var i = pointer[0] == '/' ? 1 : 0; i < tokens.Length; i++)
         {
-            // Unescape per RFC 6901: "~1" becomes "/" and "~0" becomes "~".
-            var token = tokens[i].Replace("~1", "/").Replace("~0", "~");
+            var token = JsonPointerParser.Unescape(tokens[i]);
 
             if (current.ValueKind == JsonValueKind.Object)
             {
                 if (!current.TryGetProperty(token, out JsonElement property))
-                    return new JsonPointerError(
+                    return new JsonPointerElementError(
                         JsonPointerErrorKind.PropertyNotFound,
                         $"Property '{token}' not found.",
                         token,
@@ -59,17 +56,19 @@ public static class JsonElementExtensions
             }
             else if (current.ValueKind == JsonValueKind.Array)
             {
-                if (!int.TryParse(token, out int index))
-                    return new JsonPointerError(
+                var indexError = JsonPointerParser.ParseArrayIndex(token, current.GetArrayLength(), out int index);
+
+                if (indexError == JsonPointerErrorKind.InvalidArrayIndex)
+                    return new JsonPointerElementError(
                         JsonPointerErrorKind.InvalidArrayIndex,
                         $"Invalid array index: {token}.",
                         token,
                         current);
 
-                if (index < 0 || index >= current.GetArrayLength())
-                    return new JsonPointerError(
+                if (indexError == JsonPointerErrorKind.ArrayIndexOutOfRange)
+                    return new JsonPointerElementError(
                         JsonPointerErrorKind.ArrayIndexOutOfRange,
-                        $"Array index {index} is out of range.",
+                        $"Array index {token} is out of range.",
                         token,
                         current);
 
@@ -78,7 +77,7 @@ public static class JsonElementExtensions
             else
             {
                 // If the current element is neither an object nor an array, traversal cannot continue.
-                return new JsonPointerError(
+                return new JsonPointerElementError(
                     JsonPointerErrorKind.NonTraversableElement,
                     "The current JSON element is not an object or array.",
                     token,
@@ -133,14 +132,14 @@ public static class JsonElementExtensions
     /// When the method returns, contains the JSON element referenced by the pointer if successful; otherwise, null.
     /// </param>
     /// <param name="error">
-    /// When the method returns, contains a <see cref="JsonPointerError"/> instance describing the error 
+    /// When the method returns, contains a <see cref="JsonPointerElementError"/> instance describing the error
     /// if the pointer cannot be resolved; otherwise, null.
     /// </param>
     /// <returns>
     /// True if the pointer was successfully resolved; otherwise, false.
     /// </returns>
     public static bool TryGetElement(this JsonElement element, string pointer, out JsonElement? result,
-        out JsonPointerError error)
+        out JsonPointerElementError? error)
     {
         error = Resolve(element, pointer, out var r);
         result = error == null ? r : null;
